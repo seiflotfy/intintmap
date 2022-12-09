@@ -162,6 +162,52 @@ func (m *Map) Put(key int64, val int64) {
 
 }
 
+func (m *Map) PutIfNotExists(key, val int64) (int64, bool) {
+	if key == FREE_KEY {
+		if !m.hasFreeKey {
+			m.size++
+			m.hasFreeKey = true
+			m.freeVal = val
+			return val, true
+		}
+		return m.freeVal, false
+	}
+
+	ptr := (phiMix(key) & m.mask) << 1
+	k := m.data[ptr]
+
+	if k == FREE_KEY { // end of chain already
+		m.data[ptr] = key
+		m.data[ptr+1] = val
+		if m.size >= m.threshold {
+			m.rehash()
+		} else {
+			m.size++
+		}
+		return val, true
+	} else if k == key { // overwrite existed value
+		return m.data[ptr+1], false
+	}
+
+	for {
+		ptr = (ptr + 2) & m.mask2
+		k = m.data[ptr]
+
+		if k == FREE_KEY {
+			m.data[ptr] = key
+			m.data[ptr+1] = val
+			if m.size >= m.threshold {
+				m.rehash()
+			} else {
+				m.size++
+			}
+			return val, true
+		} else if k == key {
+			return m.data[ptr+1], false
+		}
+	}
+}
+
 // Del deletes a key and its value.
 func (m *Map) Del(key int64) {
 	if key == FREE_KEY {
